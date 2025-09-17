@@ -278,6 +278,284 @@ class AdvancedTrafficAnalysis:
         print(f"\nOBJAŠNJENJE: Weighted Score = Low×1 + Normal×2 + High×3 + Heavy×4")
         print(f"   Uzima u obzir SVE situacije, ne samo jednu kategoriju!")
         
+     # PITANJE 4: KOJI MODEL NAJBOLJE PREDVIĐA SITUACIJU U SAOBRAĆAJU?
+        print("\n4. KOJI MODEL NAJBOLJE PREDVIĐA SITUACIJU U SAOBRAĆAJU?")
+        print("-" * 80)
+        
+        print("Performanse modela:")
+        model_comparison = []
+        
+        for model_name, metrics in self.evaluation_results.items():
+            print(f"{model_name}:")
+            print(f"   R² Score: {metrics['R²']:.4f}")
+            print(f"   RMSE: {metrics['RMSE']:.4f}")
+            print(f"   MAE: {metrics['MAE']:.4f}")
+            model_comparison.append((model_name, metrics['R²'], metrics['RMSE'], metrics['MAE']))
+        
+        best_model_overall = max(self.evaluation_results.keys(), 
+                               key=lambda x: self.evaluation_results[x]['R²'])
+        best_r2 = self.evaluation_results[best_model_overall]['R²']
+        
+        print(f"\n ODGOVOR: {best_model_overall} najbolje predviđa saobraćaj")
+        print(f"   R² Score: {best_r2:.4f} (objašnjava {best_r2*100:.1f}% varijanse)")
+        
+        # Sačuvaj podatke za vizuelizaciju
+        self.research_data = {
+            'feature_importance': sorted_importance,
+            'hourly_traffic': hourly_traffic,
+            'peak_hour': peak_hour,
+            'daily_traffic_density': daily_traffic_density,
+            'worst_day': worst_day,
+            'best_day': best_day,
+            'daily_scores': daily_scores,
+            'problem_scores': problem_scores,
+            'heavy_percentages': heavy_percentages,
+            'low_percentages': low_percentages,
+            'model_comparison': model_comparison,
+            'best_model': best_model_overall
+        }
+    
+    def create_individual_visualizations(self, X_test, y_test):
+        print("\n Kreiranje odvojenih vizuelizacija")
+        
+        plt.style.use('seaborn-v0_8')
+        
+        # GRAFIK 1: Feature Importance (Pitanje 1)
+        plt.figure(figsize=(12, 8))
+        features, importances = zip(*self.research_data['feature_importance'])
+        colors = plt.cm.viridis(np.linspace(0, 1, len(features)))
+        
+        bars = plt.bar(features, importances, color=colors, alpha=0.8, edgecolor='black', linewidth=1.5)
+        plt.title('PITANJE 1: Koji faktor NAJVIŠE utiče na predviđanje saobraćaja?', 
+                 fontsize=16, fontweight='bold', pad=20)
+        plt.ylabel('Važnost faktora', fontsize=14)
+        plt.xlabel('Faktori', fontsize=14)
+        
+     
+        for bar, imp in zip(bars, importances):
+            plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.01,
+                    f'{imp:.3f}', ha='center', va='bottom', fontweight='bold', fontsize=12)
+        
+        
+        bars[0].set_color('red')
+        bars[0].set_alpha(1.0)
+        
+        plt.xticks(rotation=45, ha='right')
+        plt.grid(axis='y', alpha=0.3)
+        plt.tight_layout()
+        plt.savefig('question1_feature_importance.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+        # GRAFIK 2: Saobraćaj po satima (Pitanje 2)
+        plt.figure(figsize=(14, 8))
+        hours = self.research_data['hourly_traffic'].index
+        means = self.research_data['hourly_traffic']['mean']
+        stds = self.research_data['hourly_traffic']['std']
+        
+        plt.plot(hours, means, 'b-', linewidth=4, marker='o', markersize=8, 
+                label='Prosečan saobraćaj', markerfacecolor='red', markeredgecolor='blue')
+        plt.fill_between(hours, means - stds, means + stds, alpha=0.3, color='blue', 
+                        label='Standardna devijacija')
+        
+        # Istakni špic sat
+        peak_hour = self.research_data['peak_hour']
+        plt.axvline(x=peak_hour, color='red', linestyle='--', linewidth=3, 
+                   label=f'Špic sat ({peak_hour:02d}:00)')
+        
+        plt.title('PITANJE 2: U koje doba dana je saobraćaj NAJINTENZIVNIJI?', 
+                 fontsize=16, fontweight='bold', pad=20)
+        plt.xlabel('Sat dana', fontsize=14)
+        plt.ylabel('Broj vozila', fontsize=14)
+        plt.grid(True, alpha=0.3)
+        plt.legend(fontsize=12)
+        plt.xticks(range(0, 24, 2))
+        
+        plt.tight_layout()
+        plt.savefig('question2_hourly_traffic.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+        # GRAFIK 3: Gustina saobraćaja po danima (Pitanje 3)
+        plt.figure(figsize=(16, 10))
+        
+        day_names = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+        day_short = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+        traffic_situations = ['low', 'normal', 'high', 'heavy']
+        colors = ['#2ECC71', '#F39C12', '#E67E22', '#E74C3C']  # zelena, žuta, narandžasta, crvena
+        
+        # Pripremi podatke
+        data_for_plot = {situation: [] for situation in traffic_situations}
+        
+        for day in day_names:
+            if day in self.research_data['daily_traffic_density']:
+                for situation in traffic_situations:
+                    value = self.research_data['daily_traffic_density'][day].get(situation, 0)
+                    data_for_plot[situation].append(value)
+            else:
+                for situation in traffic_situations:
+                    data_for_plot[situation].append(0)
+        
+        
+        x = np.arange(len(day_names))
+        width = 0.2  
+        
+        bars = []
+        for i, (situation, color) in enumerate(zip(traffic_situations, colors)):
+            offset = (i - 1.5) * width  
+            bars_group = plt.bar(x + offset, data_for_plot[situation], width, 
+                               label=situation.capitalize(), color=color, alpha=0.8, 
+                               edgecolor='black', linewidth=0.8)
+            bars.append(bars_group)
+            
+            
+            for bar, value in zip(bars_group, data_for_plot[situation]):
+                if value > 3:  # Prikaži samo ako je > 3%
+                    plt.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 1,
+                           f'{value:.0f}%', ha='center', va='bottom', 
+                           fontsize=9, fontweight='bold')
+        
+        
+        worst_day = self.research_data['worst_day']
+        best_day = self.research_data['best_day']
+        
+        if worst_day in day_names:
+            worst_idx = day_names.index(worst_day)
+            plt.axvline(x=worst_idx, color='red', linestyle='--', linewidth=3, alpha=0.8)
+            plt.text(worst_idx, max([max(data_for_plot[s]) for s in traffic_situations]) + 10, 
+                   f'NAJGORI DAN\n({worst_day})', ha='center', fontweight='bold', 
+                   color='red', fontsize=12, 
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="red", alpha=0.8))
+        
+        if best_day in day_names and best_day != worst_day:
+            best_idx = day_names.index(best_day)
+            plt.axvline(x=best_idx, color='green', linestyle='--', linewidth=3, alpha=0.8)
+            plt.text(best_idx, max([max(data_for_plot[s]) for s in traffic_situations]) + 10, 
+                   f'NAJBOLJI DAN\n({best_day})', ha='center', fontweight='bold', 
+                   color='green', fontsize=12,
+                   bbox=dict(boxstyle="round,pad=0.3", facecolor="white", edgecolor="green", alpha=0.8))
+        
+        plt.title('PITANJE 3: Distribucija gustine saobraćaja po danima u nedelji', 
+                 fontsize=16, fontweight='bold', pad=20)
+        plt.ylabel('Procenat (%)', fontsize=14)
+        plt.xlabel('Dani u nedelji', fontsize=14)
+        plt.xticks(x, day_short, fontsize=12)
+        plt.legend(fontsize=12, loc='upper right')
+        plt.grid(axis='y', alpha=0.3)
+        plt.ylim(0, max([max(data_for_plot[s]) for s in traffic_situations]) + 20)
+        
+        
+        textstr = f'Najbolji dan: {best_day} (Weighted Score: {self.research_data["daily_scores"].get(best_day, 0):.1f})\n'
+        textstr += f'Najgori dan: {worst_day} (Weighted Score: {self.research_data["daily_scores"].get(worst_day, 0):.1f})\n'
+        textstr += 'Weighted Score = Low×1 + Normal×2 + High×3 + Heavy×4'
+        
+        props = dict(boxstyle='round', facecolor='lightblue', alpha=0.8)
+        plt.text(0.02, 0.98, textstr, transform=plt.gca().transAxes, fontsize=11,
+                verticalalignment='top', bbox=props, fontweight='bold')
+        
+        plt.tight_layout()
+        plt.savefig('question3_traffic_density_by_day.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+        # GRAFIK 4: Detaljno poređenje modela (Pitanje 4)
+        plt.figure(figsize=(18, 12))
+        
+        
+        fig, axes = plt.subplots(2, 2, figsize=(18, 12))
+        fig.suptitle('PITANJE 4: Koji model NAJBOLJE predviđa saobraćaj?', 
+                    fontsize=18, fontweight='bold', y=0.95)
+        
+        models = list(self.evaluation_results.keys())
+        colors = ['#FF6B6B', '#4ECDC4', '#45B7D1']
+        
+        # Graf 1: R² Score
+        ax1 = axes[0, 0]
+        r2_scores = [self.evaluation_results[model]['R²'] for model in models]
+        bars1 = ax1.bar(range(len(models)), r2_scores, color=colors, alpha=0.8, 
+                       edgecolor='black', linewidth=2, width=0.6)
+        ax1.set_title('R² Score\n(Koeficijent determinacije)', 
+                     fontweight='bold', fontsize=12)
+        ax1.set_ylabel('R² Score', fontsize=11)
+        ax1.set_xticks(range(len(models)))
+        ax1.set_xticklabels(['Linear\nRegression', 'Ridge\nRegression', 'Random\nForest'], 
+                           fontsize=10)
+        ax1.grid(axis='y', alpha=0.3)
+        
+    
+        for i, (bar, score) in enumerate(zip(bars1, r2_scores)):
+            ax1.text(i, score/2, f'{score:.3f}', ha='center', va='center', 
+                    fontweight='bold', fontsize=11, color='white')
+        
+        # Graf 2: RMSE
+        ax2 = axes[0, 1]
+        rmse_scores = [self.evaluation_results[model]['RMSE'] for model in models]
+        bars2 = ax2.bar(range(len(models)), rmse_scores, color=colors, alpha=0.8, 
+                       edgecolor='black', linewidth=2, width=0.6)
+        ax2.set_title('RMSE\n(Root Mean Square Error)', 
+                     fontweight='bold', fontsize=12)
+        ax2.set_ylabel('RMSE', fontsize=11)
+        ax2.set_xticks(range(len(models)))
+        ax2.set_xticklabels(['Linear\nRegression', 'Ridge\nRegression', 'Random\nForest'], 
+                           fontsize=10)
+        ax2.grid(axis='y', alpha=0.3)
+        
+        for i, (bar, score) in enumerate(zip(bars2, rmse_scores)):
+            ax2.text(i, score/2, f'{score:.1f}', ha='center', va='center', 
+                    fontweight='bold', fontsize=11, color='white')
+        
+        # Graf 3: MAE
+        ax3 = axes[1, 0]
+        mae_scores = [self.evaluation_results[model]['MAE'] for model in models]
+        bars3 = ax3.bar(range(len(models)), mae_scores, color=colors, alpha=0.8, 
+                       edgecolor='black', linewidth=2, width=0.6)
+        ax3.set_title('MAE\n(Mean Absolute Error)', 
+                     fontweight='bold', fontsize=12)
+        ax3.set_ylabel('MAE', fontsize=11)
+        ax3.set_xticks(range(len(models)))
+        ax3.set_xticklabels(['Linear\nRegression', 'Ridge\nRegression', 'Random\nForest'], 
+                           fontsize=10)
+        ax3.grid(axis='y', alpha=0.3)
+        
+        for i, (bar, score) in enumerate(zip(bars3, mae_scores)):
+            ax3.text(i, score/2, f'{score:.1f}', ha='center', va='center', 
+                    fontweight='bold', fontsize=11, color='white')
+        
+        # Graf 4: Actual vs Predicted za najbolji model
+        ax4 = axes[1, 1]
+        best_model_name = self.research_data['best_model']
+        features = ['CarCount', 'BikeCount', 'BusCount', 'TruckCount', 'Hour', 'DayNum']
+        y_pred = self.models[best_model_name].predict(X_test[features])
+        
+        ax4.scatter(y_test, y_pred, alpha=0.7, color='#2E8B57', s=60, edgecolors='black', linewidth=0.5)
+        min_val = min(y_test.min(), y_pred.min())
+        max_val = max(y_test.max(), y_pred.max())
+        ax4.plot([min_val, max_val], [min_val, max_val], 'r--', lw=3, label='Idealna linija')
+        ax4.set_title(f'Tačnost predviđanja\n{best_model_name}', fontweight='bold', fontsize=12)
+        ax4.set_xlabel('Stvarne vrednosti', fontsize=11)
+        ax4.set_ylabel('Predviđene vrednosti', fontsize=11)
+        ax4.grid(True, alpha=0.3)
+        ax4.legend(fontsize=10)
+        
+      
+        r2 = self.evaluation_results[best_model_name]['R²']
+        ax4.text(0.05, 0.90, f'R² = {r2:.3f}', transform=ax4.transAxes, 
+                fontsize=10, fontweight='bold', 
+                bbox=dict(boxstyle="round,pad=0.3", facecolor="yellow", alpha=0.8))
+        
+     
+        plt.subplots_adjust(hspace=0.4, wspace=0.3)
+        plt.savefig('question4_model_comparison.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        
+        print("\n Svi grafici su sačuvani:")
+        print("question1_feature_importance.png")
+        print("question2_hourly_traffic.png") 
+        print("question3_traffic_density_by_day.png")
+        print("question4_model_comparison.png")
+        
+        print("\n OBJAŠNJENJE GRAFIKA:")
+        print("Grafik 3: Grouped bar chart sa distribucijom kategorija")
+        print("Crvena linija = najgori dan, zelena linija = najbolji dan")
+        print("Textbox pokazuje Weighted Score za objektivno poređenje")
+        print("Weighted Score uzima SVE situacije u obzir, ne samo jednu")
        
     def run_analysis(self):
         if not self.load_data():

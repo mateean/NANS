@@ -564,7 +564,7 @@ class AdvancedTrafficAnalysis:
         self.preprocess_data()
         X_test, y_test = self.train_and_evaluate_models()
         self.answer_research_questions()
-        #self.create_individual_visualizations(X_test, y_test)
+        self.create_individual_visualizations(X_test, y_test)
         
         print("\n" + "="*60)
         print("KOMPLETNA ANALIZA ZAVRŠENA!")
